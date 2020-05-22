@@ -80,6 +80,23 @@ function foo() {
   }
 
   #[test]
+  fn it_passes_2() {
+    test_lint(
+      "no_unreachable",
+      r#"
+function foo() {
+  return bar();
+  function bar() {
+      return 1;
+  }
+}
+      "#,
+      vec![NoUnreachable::new()],
+      json!([]),
+    )
+  }
+
+  #[test]
   fn it_fails() {
     test_lint(
       "no_unreachable",
