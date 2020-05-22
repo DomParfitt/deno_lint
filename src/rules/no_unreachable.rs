@@ -37,12 +37,16 @@ impl Visit for NoUnreachableVisitor {
       .find(|(_, stmt)| is_return(stmt))
     {
       let (_, after) = block_stmt.stmts.split_at(idx);
-      for stmt in after {
+      for (i, stmt) in after.iter().enumerate() {
+        if i == idx {
+          continue;
+        }
+
         self.context.add_diagnostic(
           stmt.span(),
           "noUnreachable",
           "Unreachable code",
-        )
+        );
       }
     }
   }
