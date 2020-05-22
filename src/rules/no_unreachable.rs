@@ -54,3 +54,47 @@ fn is_return(stmt: &Stmt) -> bool {
     _ => false,
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::test_util::test_lint;
+  use serde_json::json;
+
+  #[test]
+  fn it_passes() {
+    test_lint(
+      "no_unreachable",
+      r#"
+function foo() {
+  return;
+}
+      "#,
+      vec![NoUnreachable::new()],
+      json!([]),
+    )
+  }
+
+  #[test]
+  fn it_fails() {
+    test_lint(
+      "no_unreachable",
+      r#"
+function foo() {
+  return true;
+  console.log("done");
+}
+      "#,
+      vec![NoUnreachable::new()],
+      json!([{
+        "code": "noUnreachable",
+        "message": "Unreachable code",
+        "location": {
+          "filename": "no_unreachable",
+          "line": 4,
+          "col": 2,
+        }
+      }]),
+    )
+  }
+}
