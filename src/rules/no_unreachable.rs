@@ -66,7 +66,7 @@ mod tests {
   use serde_json::json;
 
   #[test]
-  fn it_passes() {
+  fn it_passes_when_there_is_no_unreachable_code_after_a_return() {
     test_lint(
       "no_unreachable",
       r#"
@@ -80,7 +80,49 @@ function foo() {
   }
 
   #[test]
-  fn it_passes_2() {
+  fn it_passes_when_there_is_no_unreachable_code_after_a_throw() {
+    test_lint(
+      "no_unreachable",
+      r#"
+function foo() {
+  throw new Error();
+}
+      "#,
+      vec![NoUnreachable::new()],
+      json!([]),
+    )
+  }
+
+  #[test]
+  fn it_passes_when_there_is_no_unreachable_code_after_a_break() {
+    test_lint(
+      "no_unreachable",
+      r#"
+while(value) {
+  break;
+}
+      "#,
+      vec![NoUnreachable::new()],
+      json!([]),
+    )
+  }
+
+  #[test]
+  fn it_passes_when_there_is_no_unreachable_code_after_a_continue() {
+    test_lint(
+      "no_unreachable",
+      r#"
+for (var i = 0; i < 10; i++) {
+  continue;
+}
+      "#,
+      vec![NoUnreachable::new()],
+      json!([]),
+    )
+  }
+
+  #[test]
+  fn it_passes_with_function_hoisting() {
     test_lint(
       "no_unreachable",
       r#"
@@ -97,13 +139,97 @@ function foo() {
   }
 
   #[test]
-  fn it_fails() {
+  fn it_passes_with_variable_hoisting() {
+    test_lint(
+      "no_unreachable",
+      r#"
+function bar() {
+  return x;
+  var x;
+}
+      "#,
+      vec![NoUnreachable::new()],
+      json!([]),
+    )
+  }
+
+  #[test]
+  fn it_fails_when_there_is_unreachable_code_after_a_return() {
     test_lint(
       "no_unreachable",
       r#"
 function foo() {
-  return true;
-  console.log("done");
+  return;
+  console.log();
+}
+      "#,
+      vec![NoUnreachable::new()],
+      json!([{
+        "code": "noUnreachable",
+        "message": "Unreachable code",
+        "location": {
+          "filename": "no_unreachable",
+          "line": 4,
+          "col": 2,
+        }
+      }]),
+    )
+  }
+
+  #[test]
+  fn it_fails_when_there_is_unreachable_code_after_a_throw() {
+    test_lint(
+      "no_unreachable",
+      r#"
+function foo() {
+  throw new Error();
+  console.log();
+}
+      "#,
+      vec![NoUnreachable::new()],
+      json!([{
+        "code": "noUnreachable",
+        "message": "Unreachable code",
+        "location": {
+          "filename": "no_unreachable",
+          "line": 4,
+          "col": 2,
+        }
+      }]),
+    )
+  }
+
+  #[test]
+  fn it_fails_when_there_is_unreachable_code_after_a_break() {
+    test_lint(
+      "no_unreachable",
+      r#"
+while(value) {
+  break;
+  console.log();
+}
+      "#,
+      vec![NoUnreachable::new()],
+      json!([{
+        "code": "noUnreachable",
+        "message": "Unreachable code",
+        "location": {
+          "filename": "no_unreachable",
+          "line": 4,
+          "col": 2,
+        }
+      }]),
+    )
+  }
+
+  #[test]
+  fn it_fails_when_there_is_unreachable_code_after_a_continue() {
+    test_lint(
+      "no_unreachable",
+      r#"
+for (var i = 0; i < 10; i++) {
+  continue;
+  console.log();
 }
       "#,
       vec![NoUnreachable::new()],
