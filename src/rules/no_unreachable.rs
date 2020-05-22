@@ -2,7 +2,7 @@
 use super::{Context, LintRule};
 use swc_common::{Span, Spanned};
 use swc_ecma_ast::Stmt::{self, Break, Continue, Decl, Return, Throw};
-use swc_ecma_ast::{BlockStmt, Module};
+use swc_ecma_ast::{BlockStmt, Module, ModuleItem, Script};
 use swc_ecma_visit::{Node, Visit};
 
 pub struct NoUnreachable;
@@ -39,8 +39,19 @@ impl NoUnreachableVisitor {
       .enumerate()
       .find(|(_, stmt)| is_control_flow_stmt(stmt))
     {
-      let (_, tail) = stmts.split_at(idx).1.split_at(1);
-      tail.into()
+      // Get all stmts after the control flow stmt, excluding the
+      // control flow stmt
+      let (_, tail) = stmts.split_at(idx).1.split_at(1).into();
+      let unreachable: Vec<Stmt> = tail.into();
+
+      // Remove any declarations because of function/variable hoisting
+      unreachable.iter().fold(vec![], |mut acc, el| {
+        if let Decl(_) = el {
+        } else {
+          acc.push(el.clone())
+        }
+        acc
+      })
     } else {
       vec![]
     }
@@ -50,11 +61,30 @@ impl NoUnreachableVisitor {
 impl Visit for NoUnreachableVisitor {
   fn visit_block_stmt(&mut self, block_stmt: &BlockStmt, _parent: &dyn Node) {
     for stmt in self.get_unreachable_code(&block_stmt.stmts) {
-      // Ignore declarations because of function/variable hoisting
-      if let Decl(_) = stmt {
-        continue;
-      }
+      self.add_diagnostic(stmt.span());
+    }
+  }
 
+  fn visit_module(&mut self, module: &Module, _parent: &dyn Node) {
+    let stmts: Vec<Stmt> = module
+      .body
+      .iter()
+      .filter_map(|item| {
+        if let ModuleItem::Stmt(stmt) = item {
+          Some(stmt.clone())
+        } else {
+          None
+        }
+      })
+      .collect();
+
+    for stmt in self.get_unreachable_code(&stmts) {
+      self.add_diagnostic(stmt.span());
+    }
+  }
+
+  fn visit_script(&mut self, script: &Script, _parent: &dyn Node) {
+    for stmt in self.get_unreachable_code(&script.body) {
       self.add_diagnostic(stmt.span());
     }
   }
@@ -214,7 +244,7 @@ console.log();
         "message": "Unreachable code",
         "location": {
           "filename": "no_unreachable",
-          "line": 2,
+          "line": 3,
           "col": 0,
         }
       }]),
