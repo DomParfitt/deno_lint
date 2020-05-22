@@ -1,7 +1,7 @@
 // Copyright 2020 the Deno authors. All rights reserved. MIT license.
 use super::{Context, LintRule};
-use swc_common::Spanned;
-use swc_ecma_ast::Stmt::{self, Break, Continue, Return, Throw};
+use swc_common::{Span, Spanned};
+use swc_ecma_ast::Stmt::{self, Break, Continue, Decl, Return, Throw};
 use swc_ecma_ast::{BlockStmt, Module};
 use swc_ecma_visit::{Node, Visit};
 
@@ -26,33 +26,41 @@ impl NoUnreachableVisitor {
   pub fn new(context: Context) -> Self {
     Self { context }
   }
-}
 
-impl Visit for NoUnreachableVisitor {
-  fn visit_block_stmt(&mut self, block_stmt: &BlockStmt, _parent: &dyn Node) {
-    if let Some((idx, _)) = block_stmt
-      .stmts
+  fn add_diagnostic(&self, span: Span) {
+    self
+      .context
+      .add_diagnostic(span, "noUnreachable", "Unreachable code");
+  }
+
+  fn get_unreachable_code(&self, stmts: &Vec<Stmt>) -> Vec<Stmt> {
+    if let Some((idx, _)) = stmts
       .iter()
       .enumerate()
-      .find(|(_, stmt)| is_return(stmt))
+      .find(|(_, stmt)| is_control_flow_stmt(stmt))
     {
-      let (_, after) = block_stmt.stmts.split_at(idx);
-      for (i, stmt) in after.iter().enumerate() {
-        if i == idx {
-          continue;
-        }
-
-        self.context.add_diagnostic(
-          stmt.span(),
-          "noUnreachable",
-          "Unreachable code",
-        );
-      }
+      let (_, tail) = stmts.split_at(idx).1.split_at(1);
+      tail.into()
+    } else {
+      vec![]
     }
   }
 }
 
-fn is_return(stmt: &Stmt) -> bool {
+impl Visit for NoUnreachableVisitor {
+  fn visit_block_stmt(&mut self, block_stmt: &BlockStmt, _parent: &dyn Node) {
+    for stmt in self.get_unreachable_code(&block_stmt.stmts) {
+      // Ignore declarations because of function/variable hoisting
+      if let Decl(_) = stmt {
+        continue;
+      }
+
+      self.add_diagnostic(stmt.span());
+    }
+  }
+}
+
+fn is_control_flow_stmt(stmt: &Stmt) -> bool {
   match stmt {
     Return(_) | Break(_) | Continue(_) | Throw(_) => true,
     _ => false,
@@ -154,6 +162,22 @@ function bar() {
   }
 
   #[test]
+  fn it_passes_with_variable_hoisting_in_a_switch_stmt() {
+    test_lint(
+      "no_unreachable",
+      r#"
+switch (foo) {
+  case 1:
+    break;
+    var x;
+}
+      "#,
+      vec![NoUnreachable::new()],
+      json!([]),
+    )
+  }
+
+  #[test]
   fn it_fails_when_there_is_unreachable_code_after_a_return() {
     test_lint(
       "no_unreachable",
@@ -181,10 +205,8 @@ function foo() {
     test_lint(
       "no_unreachable",
       r#"
-function foo() {
-  throw new Error();
-  console.log();
-}
+throw new Error();
+console.log();
       "#,
       vec![NoUnreachable::new()],
       json!([{
@@ -192,8 +214,8 @@ function foo() {
         "message": "Unreachable code",
         "location": {
           "filename": "no_unreachable",
-          "line": 4,
-          "col": 2,
+          "line": 2,
+          "col": 0,
         }
       }]),
     )
