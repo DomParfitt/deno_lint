@@ -1,9 +1,12 @@
 // Copyright 2020 the Deno authors. All rights reserved. MIT license.
 use super::{Context, LintRule};
 use swc_common::Span;
-use swc_ecma_ast::Expr::Assign;
+use swc_ecma_ast::Expr::{self, Assign, Paren};
 use swc_ecma_ast::Module;
-use swc_ecma_ast::Stmt::{self, DoWhile, For, If, While};
+use swc_ecma_ast::{
+  ParenExpr,
+  Stmt::{self, DoWhile, For, If, While},
+};
 use swc_ecma_visit::{Node, Visit};
 
 pub struct NoCondAssign;
@@ -35,30 +38,37 @@ impl NoCondAssignVisitor {
       "Expected a conditional expression and instead saw an assignment",
     );
   }
+
+  fn check_test_expr(&self, expr: &Expr) {
+    match expr {
+      Assign(assign) => self.add_diagnostic(assign.span),
+      Paren(paren) => self.check_paren_expr(&paren),
+      _ => {}
+    }
+  }
+
+  fn check_paren_expr(&self, paren_expr: &ParenExpr) {
+    match paren_expr.expr.as_ref() {
+      Paren(paren_expr) => self.check_paren_expr(paren_expr),
+      Assign(assign) => self.add_diagnostic(assign.span),
+      _ => {}
+    }
+  }
 }
 
 impl Visit for NoCondAssignVisitor {
   fn visit_stmt(&mut self, stmt: &Stmt, _parent: &dyn Node) {
     match stmt {
-      If(if_stmt) => {
-        if let Assign(assign) = &*if_stmt.test {
-          self.add_diagnostic(assign.span);
-        }
-      }
-      While(while_stmt) => {
-        if let Assign(assign) = &*while_stmt.test {
-          self.add_diagnostic(assign.span);
-        }
-      }
-      DoWhile(do_while) => {
-        if let Assign(assign) = &*do_while.test {
-          self.add_diagnostic(assign.span);
-        }
-      }
+      If(if_stmt) => self.check_test_expr(if_stmt.test.as_ref()),
+      While(while_stmt) => self.check_test_expr(while_stmt.test.as_ref()),
+      DoWhile(do_while) => self.check_test_expr(&*do_while.test.as_ref()),
       For(for_stmt) => {
-        if let Some(Assign(assign)) = for_stmt.test.as_deref() {
-          self.add_diagnostic(assign.span);
+        if let Some(test) = for_stmt.test.as_deref() {
+          self.check_test_expr(test);
         }
+        // if let Some(Assign(assign)) = for_stmt.test.as_deref() {
+        //   self.add_diagnostic(assign.span);
+        // }
       }
       _ => {}
     }
