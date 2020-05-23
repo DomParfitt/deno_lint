@@ -66,9 +66,6 @@ impl Visit for NoCondAssignVisitor {
         if let Some(test) = for_stmt.test.as_deref() {
           self.check_test_expr(test);
         }
-        // if let Some(Assign(assign)) = for_stmt.test.as_deref() {
-        //   self.add_diagnostic(assign.span);
-        // }
       }
       _ => {}
     }
