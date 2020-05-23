@@ -49,8 +49,8 @@ impl NoCondAssignVisitor {
 
   fn check_paren_expr(&self, paren_expr: &ParenExpr) {
     match paren_expr.expr.as_ref() {
-      Paren(paren_expr) => self.check_paren_expr(paren_expr),
       Assign(assign) => self.add_diagnostic(assign.span),
+      Paren(paren_expr) => self.check_paren_expr(paren_expr),
       _ => {}
     }
   }
