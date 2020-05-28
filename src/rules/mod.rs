@@ -62,6 +62,7 @@ mod no_empty;
 pub use no_empty::NoEmpty;
 mod no_cond_assign;
 pub use no_cond_assign::NoCondAssign;
+mod no_fallthrough;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Location {
