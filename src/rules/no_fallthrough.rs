@@ -30,6 +30,10 @@ impl Visit for NoFallthroughVisitor {
   fn visit_switch_stmt(&mut self, switch: &SwitchStmt, _parent: &dyn Node) {
     let mut iter = switch.cases.iter().peekable();
     for case in &iter.next() {
+      if case.cons.is_empty() {
+        continue;
+      }
+
       if case.cons.iter().any(|stmt| is_control_flow_stmt(stmt)) {
         continue;
       }
@@ -110,6 +114,59 @@ switch(foo) {
 
   case 2:
     doSomething();
+}
+      "#,
+      vec![NoFallthrough::new()],
+      json!([]),
+    )
+  }
+
+  #[test]
+  fn it_passes_for_a_switch_with_shared_cases() {
+    test_lint(
+      "no_fallthrough",
+      r#"
+switch(foo) {
+  case 1:
+  case 2:
+    doSomething();
+}
+      "#,
+      vec![NoFallthrough::new()],
+      json!([]),
+    )
+  }
+
+  #[test]
+  fn it_passes_for_a_switch_with_a_fallthrough_comment() {
+    test_lint(
+      "no_fallthrough",
+      r#"
+switch(foo) {
+  case 1:
+    doSomething();
+    // falls through
+
+  case 2:
+    doSomethingElse();
+}
+
+switch(foo) {
+  case 1:
+    doSomething();
+    // fall through
+
+  case 2:
+    doSomethingElse();
+}
+
+switch(foo) {
+  case 1:
+    doSomething();
+    // fallsthrough
+
+  case 2:
+    doSomethingElse();
 }
       "#,
       vec![NoFallthrough::new()],
