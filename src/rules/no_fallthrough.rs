@@ -1,4 +1,5 @@
 use super::{Context, LintRule};
+use regex::Regex;
 use swc_ecma_ast::Stmt::{Break, Continue, Return, Throw};
 use swc_ecma_ast::{Module, Stmt, SwitchStmt};
 use swc_ecma_visit::{Node, Visit};
@@ -28,6 +29,8 @@ impl NoFallthroughVisitor {
 
 impl Visit for NoFallthroughVisitor {
   fn visit_switch_stmt(&mut self, switch: &SwitchStmt, _parent: &dyn Node) {
+    let regex = Regex::new(r#"falls?\s?through"#).unwrap();
+
     let mut iter = switch.cases.iter().peekable();
     for case in &iter.next() {
       if case.cons.is_empty() {
@@ -35,6 +38,16 @@ impl Visit for NoFallthroughVisitor {
       }
 
       if case.cons.iter().any(|stmt| is_control_flow_stmt(stmt)) {
+        continue;
+      }
+
+      if self
+        .context
+        .leading_comments
+        .iter()
+        .flat_map(|r| r.value().clone())
+        .any(|comment| regex.is_match(&comment.text))
+      {
         continue;
       }
 
