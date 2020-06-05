@@ -48,3 +48,29 @@ fn is_control_flow_stmt(stmt: &Stmt) -> bool {
     _ => false,
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::test_util::test_lint;
+  use serde_json::json;
+
+  #[test]
+  fn it_passes_for_a_switch_with_no_fallthrough() {
+    test_lint(
+      "no_fallthrough",
+      r#"
+switch(foo) {
+  case 1:
+    doSomething();
+    break;
+
+  case 2:
+    doSomething();
+}
+      "#,
+      vec![NoFallthrough::new()],
+      json!([]),
+    )
+  }
+}
