@@ -28,16 +28,19 @@ impl NoFallthroughVisitor {
 
 impl Visit for NoFallthroughVisitor {
   fn visit_switch_stmt(&mut self, switch: &SwitchStmt, _parent: &dyn Node) {
-    for case in &switch.cases {
+    let mut iter = switch.cases.iter().peekable();
+    for case in &iter.next() {
       if case.cons.iter().any(|stmt| is_control_flow_stmt(stmt)) {
         continue;
       }
 
-      self.context.add_diagnostic(
-        case.span,
-        "noFallthrough",
-        "Expected break statement before case",
-      )
+      if let Some(next) = iter.peek() {
+        self.context.add_diagnostic(
+          next.span,
+          "noFallthrough",
+          "Expected break statement before case",
+        )
+      }
     }
   }
 }
@@ -71,6 +74,72 @@ switch(foo) {
       "#,
       vec![NoFallthrough::new()],
       json!([]),
+    )
+  }
+
+  #[test]
+  fn it_passes_for_a_switch_with_no_fallthrough_return() {
+    test_lint(
+      "no_fallthrough",
+      r#"
+function bar(foo) {
+  switch(foo) {
+    case 1:
+      doSomething();
+      return;
+
+    case 2:
+      doSomething();
+  }
+}
+      "#,
+      vec![NoFallthrough::new()],
+      json!([]),
+    )
+  }
+
+  #[test]
+  fn it_passes_for_a_switch_with_no_fallthrough_throw() {
+    test_lint(
+      "no_fallthrough",
+      r#"
+switch(foo) {
+  case 1:
+    doSomething();
+    throw new Error("Boo!");
+
+  case 2:
+    doSomething();
+}
+      "#,
+      vec![NoFallthrough::new()],
+      json!([]),
+    )
+  }
+
+  #[test]
+  fn it_passes_for_a_switch_with_a_fallthrough() {
+    test_lint(
+      "no_fallthrough",
+      r#"
+switch(foo) {
+  case 1:
+    doSomething();
+
+  case 2:
+    doSomething();
+}
+      "#,
+      vec![NoFallthrough::new()],
+      json!([{
+        "code": "noFallthrough",
+        "message": "Expected break statement before case",
+        "location": {
+          "filename": "no_fallthrough",
+          "line": 6,
+          "col": 2,
+        }
+      }]),
     )
   }
 }
